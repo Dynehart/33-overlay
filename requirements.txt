@@ -1,2 +1,6 @@
-PythonOverlayLibgments
+PythonOverlayLib
 inputs
+opencv-python
+numpy
+matplotlib
+pygame

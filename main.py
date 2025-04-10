@@ -1,8 +1,11 @@
+from pprint import pprint
 import overlay_lib
-from overlay_lib import Vector2D, RgbaColor, FlDrawRect, FlDrawCircle
+from overlay_lib import Vector2D, RgbaColor, FlDrawRect, FlDrawCircle, DrawText
 from inputs import get_gamepad
 import math
 import threading
+from locations import purple, magenta, yellow
+
 
 class XboxController(object):
     MAX_TRIG_VAL = math.pow(2, 8)
@@ -38,39 +41,41 @@ class XboxController(object):
         self._monitor_thread.daemon = True
         self._monitor_thread.start()
 
+    def read(self): # return the buttons/triggers that you care about in this methode
+        a = self.DownDPad
+        b = self.LeftDPad
+        c = self.RightDPad
+        d = self.UpDPad
+        return [a,b,c,d]
+
     def left_trigger(self):
         return self.LeftTrigger
 
     def update(self):
         # update and check for both buttons being released
         if self.VersionPressed:
-            self.VersionPressed = self.RightBumper or self.LeftBumper
+            self.VersionPressed = self.RightDPad or self.LeftDPad
             return self.version
         
         # only handle this when button is released and pressed again
-        if self.RightBumper:
+        if self.RightDPad:
             self.version = (self.version + 1) % 3
             self.VersionPressed = True
-        if self.LeftBumper:
+        if self.LeftDPad:
             self.version = (self.version - 1) % 3
             self.VersionPressed = True
         return self.version
 
-
-    def read(self): # return the buttons/triggers that you care about in this methode
-        rb = self.RightBumper
-        x = self.LeftJoystickX
-        y = self.LeftJoystickY
-        a = self.A
-        b = self.X # b=1, x=2
-        rb = self.RightBumper
-        return [x, y, a, b, rb]
-
-
     def _monitor_controller(self):
         while True:
-            events = get_gamepad()
+            try:
+                events = get_gamepad()
+            except:
+                # sleep(1.0 / 30.0)
+                continue
+
             for event in events:
+                pprint(vars(event))
                 if event.code == 'ABS_Y':
                     self.LeftJoystickY = event.state / XboxController.MAX_JOY_VAL # normalize between -1 and 1
                 elif event.code == 'ABS_X':
@@ -103,14 +108,26 @@ class XboxController(object):
                     self.Back = event.state
                 elif event.code == 'BTN_START':
                     self.Start = event.state
-                elif event.code == 'BTN_TRIGGER_HAPPY1':
+                    # ABS_HAT0X
+                # elif event.code == 'BTN_TRIGGER_HAPPY1':
+                elif event.code == 'ABS_HAT0X':
                     self.LeftDPad = event.state
-                elif event.code == 'BTN_TRIGGER_HAPPY2':
+                # elif event.code == 'BTN_TRIGGER_HAPPY2':
+                elif event.code == 'ABS_HAT1X':
                     self.RightDPad = event.state
-                elif event.code == 'BTN_TRIGGER_HAPPY3':
+                # elif event.code == 'BTN_TRIGGER_HAPPY3':
+                elif event.code == 'ABS_HAT0Y':
                     self.UpDPad = event.state
-                elif event.code == 'BTN_TRIGGER_HAPPY4':
+                # elif event.code == 'BTN_TRIGGER_HAPPY4':
+                elif event.code == 'ABS_HAT1Y':
                     self.DownDPad = event.state
+
+# keys map to XboxController.version
+data = {
+    0: purple,
+    1: magenta,
+    2: yellow,
+}
 
 # this is the value for how many pixels your map is offset
 x_offset = 530
@@ -122,89 +139,6 @@ y_small = 70
 
 # if it doesn't work just play with this. calculating it is probably slower
 ratio = 1.78
-
-purple = {
-    "elite": [
-        [560, 128],
-        [816, 555],
-    ],
-    "chests": [
-        [385, 292],
-        [380, 503],
-        [548, 409],
-        [713, 344],
-        [639, 627],
-        [213, 711],
-        [444, 881],
-        [1070, 569],
-        [1040, 236],
-        [1230, 701],
-        [1414, 356],
-        [1224, 472],
-        [962, 734],
-        [1315, 273],
-        [1548, 581],
-        [1478, 808],
-        ],
-    "urns": [],
-    "shrines": [],
-    "color": RgbaColor(120, 95, 240, 127),
-}
-
-magenta = {
-    "elite": [
-        [209, 712],
-        [1176, 219],
-        [1536, 872],
-    ],
-    "chests": [
-        [298, 157],
-        [560, 127],
-        [405, 504],
-        [761, 791],
-        [890, 664],
-        [972, 499],
-        [921, 214],
-        [1179, 384],
-        [1137, 629],
-        [1345, 747],
-        [1511, 474]
-        ],
-    "urns": [],
-    "shrines": [],
-    "color": RgbaColor(220, 38, 127, 127),
-}
-
-yellow = {
-    "elite": [
-        [209, 712],
-        [1176, 219],
-        [1536, 872],
-    ],
-    "chests": [
-        [298, 157],
-        [560, 127],
-        [405, 504],
-        [761, 791],
-        [890, 664],
-        [972, 499],
-        [921, 214],
-        [1179, 384],
-        [1137, 629],
-        [1345, 747],
-        [1511, 474]
-        ],
-    "urns": [],
-    "shrines": [],
-    "color": RgbaColor(230, 159, 0, 127),
-}
-
-# keys map to XboxController.version
-data = {
-    0: purple,
-    1: magenta,
-    2: yellow,
-}
 
 # transform the coordinates using the constants
 def transform(coord):
@@ -225,8 +159,17 @@ def callback():
     # number is from trial and error. might be just my controller
     # seems to be the closest for the xbox controller to show at the same time as map open
     if joy.left_trigger() > 0.524:
-        result = []
         color = data[version]['color']
+        curr =  data[version]
+
+        result = []
+
+        for i in range(len(curr['label'])):
+            text = data[version]['label'][i]
+            result.append(
+            DrawText(Vector2D(x_offset, y_offset+36*i), 8, text ,"Times", color, 10)
+            )
+
 
         chests = map(transform, data[version]['chests'])
         elites = map(transform, data[version]['elite'])
@@ -244,7 +187,8 @@ def callback():
 
 overlay = overlay_lib.Overlay(
     drawlistCallback=callback,
-    refreshTimeout=10
+    # increase this if performance is an issue
+    refreshTimeout=50
 )
 
 overlay.spawn()
