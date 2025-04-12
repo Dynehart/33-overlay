@@ -1,134 +1,135 @@
-import threading
-# import pygame
+from typing import NamedTuple
 import overlay_lib
-from overlay_lib import Vector2D, RgbaColor, FlDrawRect, FlDrawCircle, DrawText
+from overlay_lib import Vector2D, FlDrawRect, FlDrawCircle, DrawText
+from controller import XboxController
+from locations import data
 
-from helper import HiddenPrints
-from locations import purple, magenta, yellow
-
-# lmao why does this work?
-with HiddenPrints():
-    import pygame
-
-# keys map to XboxController.version
-data = {
-    0: purple,
-    1: magenta,
-    2: yellow,
-}
-pygame.init()
-joysticks = []
-clock = pygame.time.Clock()
-keepPlaying = True
-
-# idk why this is necessary but trying to just call 
-# pygame.joystick.Joystick(i).init() doesn't work
-# I guess the object needs to persist somewhere?
-for i in range(0, pygame.joystick.get_count()):
-    # create an Joystick object in our list
-    joysticks.append(pygame.joystick.Joystick(i))
-    # initialize the appended joystick
-    joysticks[-1].init()
-
-# this is the value for how many pixels your map is offset
-x_offset = 530
-y_offset = 290
+# class Vector2D(NamedTuple):
+#     x: int
+#     y: int
 
 # don't change this
-x_small = 140
-y_small = 70
+X_OFFSET = 375
+Y_OFFSET = 200
+OFFSET = Vector2D(375, 200)
+FONT_SIZE = 12 # 8
+FONT_HEIGHT = FONT_SIZE * 4 # this is a decent approximation
 
-# if it doesn't work just play with this. calculating it is probably slower
-# ratio = 1.78
-ratio = 1
+# keys map to XboxController.version
 
+# joysticks = []
+
+# def detect_joysticks():
+#     if len(joysticks) == 0:
+#         # idk why this is necessary but trying to just call
+#         # pygame.joystick.Joystick(i).init() doesn't work
+#         # I guess the object needs to persist somewhere?
+#         for i in range(0, pygame.joystick.get_count()):
+#             # create an Joystick object in our list
+#             joysticks.append(pygame.joystick.Joystick(i))
+#             # initialize the appended joystick
+#             joysticks[-1].init()
+# pygame.init()
+# clock = pygame.time.Clock()
+# keepPlaying = True
+
+
+# we need to figure out where the map starts/ends for several aspect ratios
+# 16:9 at 3840 has 375 and 3465
+#         2160 has 200 and 1940
+# 3840-375=3465
+# with a ratio of 1/10.24 we can just
+
+
+# if it doesn't work just play with this.
+# i don't remember how to calculate it
+# maybe your resolution / [3840, 2160]
+ratio = Vector2D(1, 1)
+# this is the value for how many pixels your map is offset
+offset = Vector2D(375, 200)
 size = 20
 
-# transform the coordinates using the constants
+
 def transform(coord):
-    x = x_offset + ratio*(coord[0]-x_small)
-    y = y_offset + ratio*(coord[1]-y_small)
-    return [
-        round(x),
-        round(y),
-    ]
+    x = offset.x + ratio.x * (coord[0] - OFFSET.x)
+    y = offset.y + ratio.y * (coord[1] - OFFSET.y)
+    return [round(x), round(y)]
+
 
 version = 0
 
+joy = XboxController(0, 3)
 
-class XboxController():
-    def __init__(self):
-        # control which version of the map to show
-        self.version = 0
-        self.VersionPressed = False
+def callback() -> list:
+    result = []
 
-        self.AxisX = 0
-        self.PrevAxisX = 0
-        self.LeftTrigger = -1
+    state = joy.update()
+    version = state.version
+    enabled = state.enabled
+    location = state.location
 
-        self._monitor_thread = threading.Thread(target=self._monitor_controller, args=())
-        self._monitor_thread.daemon = True
-        self._monitor_thread.start()
-
-    def _monitor_controller(self):
-        while True:
-            for event in pygame.event.get():
-                if "hat" in event.dict:
-                    [self.AxisX, y] = event.dict["value"]
-                elif "axis" in event.dict and event.dict["axis"] == 4:
-                    self.LeftTrigger = event.dict["value"]
-
-    def update(self):
-        # this means it's being held
-        if self.AxisX == self.PrevAxisX:
-            return self.version
-        
-        self.PrevAxisX = self.AxisX
-        if self.AxisX == 1:
-            self.version = (self.version + 1) % 3
-        if self.AxisX == -1:
-            self.version = (self.version - 1) % 3
-
-        return self.version
-
-joy = XboxController()
-
-def callback():
-    version = joy.update()
+    curr = data[location][version]
+    color = curr["color"]
+    outline = curr["outline"]
 
     # number is from trial and error. might be just my controller
     # seems to be the closest for the xbox controller to show at the same time as map open
     if joy.LeftTrigger > 0:
-        color = data[version]['color']
-        curr =  data[version]
+        if not enabled:
+            return [DrawText(offset, FONT_SIZE, "disabled", "Times", color, 10)]
 
-        result = []
-
-        for i in range(len(curr['label'])):
-            text = data[version]['label'][i]
+        text_offset = offset.y
+        for i in range(len(curr["label"])):
+            text = curr["label"][i]
             result.append(
-            DrawText(Vector2D(x_offset, y_offset+36*i), 8, text ,"Times", color, 10)
+                DrawText(
+                    Vector2D(offset.x, text_offset),
+                    FONT_SIZE,
+                    text,
+                    "Times",
+                    color,
+                    10,
+                )
             )
+            text_offset += FONT_HEIGHT
 
+        for key in curr:
+            if key != "chests" and key != "elite":
+                continue
 
-        chests = map(transform, data[version]['chests'])
-        elites = map(transform, data[version]['elite'])
+            text = f"{len(curr[key])} {key}"
+            result.append(
+                DrawText(Vector2D(offset.x, text_offset), FONT_SIZE, text, "Times", color, 10)
+            )
+            text_offset += FONT_HEIGHT
+
+        chests = map(transform, curr["chests"])
+        elites = map(transform, curr["elite"])
+
         for coord in chests:
             result.append(
-                FlDrawCircle(Vector2D(coord[0], coord[1]), size, color, color, 0)
+                FlDrawRect(
+                    Vector2D(coord[0] - size, coord[1] - size),
+                    size * 2,
+                    size * 2,
+                    color,
+                    color,
+                    0,
+                )
             )
 
         for coord in elites:
             result.append(
-                FlDrawRect(Vector2D(coord[0], coord[1]), size*2, size*2, color, color, 0)
+                FlDrawCircle(Vector2D(coord[0], coord[1]), size, color, outline, 5)
             )
-        return result
-    return []
+
+    return result
+
 
 overlay = overlay_lib.Overlay(
     drawlistCallback=callback,
     # increase this if performance is an issue
-    refreshTimeout=50
+    refreshTimeout=50,
 )
 
 overlay.spawn()
