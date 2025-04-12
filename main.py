@@ -1,5 +1,6 @@
 import sys
 
+
 # imports are in if statements to prevent the import running code
 # if everything was inside functions this wouldn't be necessary
 if __name__ == "__main__":
