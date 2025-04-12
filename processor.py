@@ -96,15 +96,14 @@ def group_similar_values(numbers, tolerance=1.0):
 
     return result
 
+def process():
+    for file_name in os.listdir(MapsFolder):
+        for template_name in os.listdir(TemplatesFolder):
+            file_path = os.path.join(MapsFolder, file_name)
+            template_path = os.path.join(TemplatesFolder, template_name)
 
-for file_name in os.listdir(MapsFolder):
-    for template_name in os.listdir(TemplatesFolder):
-        file_path = os.path.join(MapsFolder, file_name)
-        template_path = os.path.join(TemplatesFolder, template_name)
+            if os.path.isdir(file_path) or os.path.isdir(template_path):
+                continue
 
-        if os.path.isdir(file_path) or os.path.isdir(template_path):
-            continue
+            detect_shape(file_path, template_path)
 
-        detect_shape(file_path, template_path)
-
-# detect_shape('purple.png', 'urn.png')
